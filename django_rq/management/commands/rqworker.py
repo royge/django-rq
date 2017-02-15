@@ -4,6 +4,8 @@ import logging
 from optparse import make_option
 
 from django.core.management.base import BaseCommand
+from django.db import connections
+from django.utils.version import get_version
 
 from django_rq.queues import get_queues
 from django_rq.workers import get_exception_handlers
@@ -30,6 +32,11 @@ def import_attribute(name):
     module_name, attribute = name.rsplit('.', 1)
     module = importlib.import_module(module_name)
     return getattr(module, attribute)
+
+
+def reset_db_connections():
+    for c in connections.all():
+        c.close()
 
 
 class Command(BaseCommand):
@@ -102,6 +109,8 @@ class Command(BaseCommand):
             # Call use_connection to push the redis connection into LocalStack
             # without this, jobs using RQ's get_current_job() will fail
             use_connection(w.connection)
+            # Close any opened DB connection before any fork
+            reset_db_connections()
             w.work(burst=options.get('burst', False))
         except ConnectionError as e:
             print(e)
